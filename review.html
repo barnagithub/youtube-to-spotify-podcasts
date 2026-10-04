@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podcast Match Review</title>
+<!-- Served by 3_review.py, which supplies /data and saves each click via /decision. Max ~300 lines. -->
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #e2e2dd;
+    --accent: #1db954; --accent-text: #0b6b30; --warn: #b26a00; --bad: #b3261e; --chip: #efefeb;
+    --decided: #e9f7ee;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --card: #1f1f1d; --text: #ececea; --muted: #a3a39d; --line: #33332f;
+      --accent: #1ed760; --accent-text: #6ee69a; --warn: #f0a640; --bad: #f2867e; --chip: #2a2a27;
+      --decided: #1b2e22;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line);
+           padding: 12px 16px; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .tab { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px;
+         padding: 5px 12px; cursor: pointer; font: inherit; }
+  .tab[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  input[type=search], input[type=text] { font: inherit; color: var(--text); background: var(--card);
+         border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 0; }
+  input[type=search] { flex: 1 1 200px; }
+  main { max-width: 980px; margin: 0 auto; padding: 12px 16px 60px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+          margin-bottom: 12px; }
+  .card.decided { background: var(--decided); }
+  .title { font-weight: 600; font-size: 16px; color: var(--text); text-decoration: none; }
+  .title:hover { text-decoration: underline; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .outcome { margin: 10px 0; font-size: 14px; }
+  .outcome b { color: var(--accent-text); }
+  .outcome .keep { color: var(--muted); font-weight: 600; }
+  .cands { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+  .cand { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+          border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .cand.chosen { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  .cand a { color: var(--text); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .chip { background: var(--chip); border-radius: 6px; padding: 1px 7px; font-size: 12px; color: var(--muted); }
+  .chip.good { color: var(--accent-text); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+  .actions input[type=text] { flex: 1 1 220px; }
+  button.act { font: inherit; font-size: 13px; border-radius: 8px; padding: 5px 10px; cursor: pointer;
+               border: 1px solid var(--line); background: var(--card); color: var(--text); white-space: nowrap; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #062b14; font-weight: 600; }
+  a.link { font-size: 13px; color: var(--accent-text); white-space: nowrap; }
+  .err { color: var(--bad); font-size: 13px; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  .status { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Podcast match review</h1>
+  <div class="bar" id="tabs"></div>
+  <div class="bar" style="margin-top:8px">
+    <input type="search" id="q" placeholder="Filter by title or channel" aria-label="Filter">
+  </div>
+</header>
+<main id="list"><p class="empty">Loading…</p></main>
+<script>
+const TABS = [
+  ["review", "To review", m => m.status === "review" && !(m.playlist_item_id in decisions)],
+  ["auto", "Auto-matched", m => m.status === "auto"],
+  ["none", "No match", m => m.status === "none"],
+  ["decided", "Decided by you", m => m.playlist_item_id in decisions],
+  ["pending", "Not matched yet", m => m.status === "pending"],
+  ["all", "All", m => true],
+];
+let matches = [], decisions = {}, tab = "review", shown = [];
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "on") for (const [ev, fn] of Object.entries(v)) n.addEventListener(ev, fn);
+    else if (v !== null && v !== undefined && v !== false) n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined) n.append(k);
+  return n;
+}
+const ext = (href, text, cls = "link") => el("a", {href, target: "_blank", rel: "noopener", class: cls}, text);
+function dur(s) {
+  if (!s) return "?";
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+}
+const day = v => v ? v.slice(0, 10) : "?";
+const episodeLink = id => "https://open.spotify.com/episode/" + id;
+
+function parseEpisode(text) {
+  const t = text.trim();
+  let m = t.match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?episode\/([A-Za-z0-9]{22})/);
+  if (m) return "spotify:episode:" + m[1];
+  m = t.match(/^spotify:episode:([A-Za-z0-9]{22})$/);
+  return m ? t : null;
+}
+
+// Same rule as common.py's resolve(): your decision wins, otherwise "auto" takes the top candidate.
+function outcome(m) {
+  const d = decisions[m.playlist_item_id];
+  if (d) return {uri: d.episode_uri, by: "you"};
+  if (m.status === "auto") return {uri: m.candidates[0].uri, by: "auto"};
+  return {uri: null, by: {review: "undecided", pending: "pending"}[m.status] || "auto"};
+}
+
+async function decide(m, decision, card) {
+  const res = await fetch("/decision", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({playlist_item_id: m.playlist_item_id, decision})});
+  if (!res.ok) { alert("Not saved: " + (await res.json()).error); return; }
+  if (decision === null) delete decisions[m.playlist_item_id];
+  else decisions[m.playlist_item_id] = decision;
+  card.replaceWith(renderCard(m));  // stays in place until you switch tabs, so a misclick is easy to undo
+  renderTabs();
+}
+
+function chips(c) {
+  const out = [el("span", {class: "chip " + (c.title_sim >= .8 ? "good" : c.title_sim >= .45 ? "warn" : "bad")},
+                  "title " + Math.round(c.title_sim * 100) + "%")];
+  if (c.duration) out.push(el("span", {class: "chip " + {strong: "good", weak: "warn", far: "bad"}[c.duration]},
+                              "length " + dur(c.duration_s) + " (" + c.duration + ")"));
+  if (c.days !== null && c.days !== undefined) out.push(el("span", {class: "chip " + (c.days <= 7 ? "good" : "")},
+                                                           c.days + (c.days === 1 ? " day" : " days") + " apart"));
+  if (c.numbers) out.push(el("span", {class: "chip " + (c.numbers === "match" ? "good" : "bad")},
+                             "episode # " + c.numbers));
+  return el("div", {class: "chips"}, out);
+}
+
+function renderCard(m) {
+  const o = outcome(m), id = m.playlist_item_id;
+  const card = el("article", {class: "card" + (o.by === "you" ? " decided" : "")});
+  const chosen = o.uri && m.candidates.find(c => c.uri === o.uri);
+  const where = o.uri
+    ? ["→ Spotify: ", el("b", {}, chosen ? chosen.name : o.uri)]
+    : [el("span", {class: "keep"}, {undecided: "Undecided: stays on YouTube for now",
+                                    pending: "Not matched yet: run 2_match.py again to search Spotify"}[o.by]
+                                   || "Stays on YouTube")];
+  const searchQ = encodeURIComponent(m.title);
+  const paste = el("input", {type: "text", placeholder: "Paste a Spotify episode link", "aria-label": "Spotify episode link"});
+  const err = el("span", {class: "err"});
+
+  card.append(
+    el("div", {class: "status meta"}, m.status + (m.source ? " · via " + m.source : "")),
+    ext("https://www.youtube.com/watch?v=" + m.video_id, m.title, "title"),
+    el("div", {class: "meta"}, (m.channel || "?") + " · " + dur(m.duration_s) + " · " + day(m.published)),
+    el("div", {class: "outcome"}, where, el("span", {class: "meta"}, o.by === "you" ? "  (your decision)" : "")),
+    m.candidates.length ? el("ul", {class: "cands"}, m.candidates.map(c =>
+      el("li", {class: "cand" + (c.uri === o.uri ? " chosen" : "")},
+        el("div", {}, ext(episodeLink(c.id), c.name, ""),
+          el("div", {class: "meta"}, (c.show || "show unknown") + " · " + day(c.release_date)), chips(c)),
+        el("button", {class: "act" + (c.uri === o.uri ? "" : " primary"),
+                      on: {click: () => decide(m, {episode_uri: c.uri}, card)}},
+           c.uri === o.uri ? "Chosen" : "Use this")))) : el("p", {class: "meta"}, "No candidates found."),
+    el("div", {class: "actions"},
+      ext("https://open.spotify.com/search/" + searchQ + "/episodes", "Search Spotify ↗"),
+      ext("https://www.google.com/search?q=" + encodeURIComponent("site:open.spotify.com/episode " + m.title), "Search Google ↗"),
+      paste,
+      el("button", {class: "act", on: {click: () => {
+        const uri = parseEpisode(paste.value);
+        if (!uri) { err.textContent = "That isn't a Spotify episode link."; return; }
+        decide(m, {episode_uri: uri}, card);
+      }}}, "Use link"),
+      el("button", {class: "act", on: {click: () => decide(m, {episode_uri: null}, card)}}, "Not on Spotify"),
+      id in decisions ? el("button", {class: "act", on: {click: () => decide(m, null, card)}}, "Undo my decision") : null,
+      err));
+  return card;
+}
+
+function renderTabs() {
+  const bar = document.getElementById("tabs");
+  bar.replaceChildren(...TABS.map(([key, label, test]) => el("button", {
+    class: "tab", "aria-pressed": String(key === tab),
+    on: {click: () => { tab = key; render(); }}}, label + " " + matches.filter(test).length)));
+  const moving = matches.filter(m => outcome(m).uri).length;
+  bar.append(el("span", {class: "meta", style: "margin-left:auto"},
+                moving + " of " + matches.length + " will move to Spotify"));
+}
+
+function render() {
+  renderTabs();
+  const test = TABS.find(t => t[0] === tab)[2];
+  const q = document.getElementById("q").value.toLowerCase();
+  shown = matches.filter(m => test(m) && (!q || (m.title + " " + (m.channel || "")).toLowerCase().includes(q)));
+  const list = document.getElementById("list");
+  list.replaceChildren(...(shown.length ? shown.map(renderCard) : [el("p", {class: "empty"}, "Nothing here.")]));
+}
+
+document.getElementById("q").addEventListener("input", render);
+fetch("/data").then(r => r.json()).then(d => {
+  matches = d.matches.filter(m => m.status !== "unavailable");
+  decisions = d.decisions;
+  render();
+}).catch(() => { document.getElementById("list").innerHTML = '<p class="empty">Could not load data. Is 3_review.py running?</p>'; });
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Credentials and login tokens
+client_secret.json
+youtube_token.json
+spotify_token.json
+
+# Personal settings (format is in README.md)
+/settings.json
+
+# Data written by the scripts
+youtube_items.json
+shows.json
+show_episodes.json
+episode_search.json
+matches.json
+decisions.json
+apply_progress.json
+playlist_overlap.csv
+*.tmp
+
+# Python
+.venv/
+__pycache__/
