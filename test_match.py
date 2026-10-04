@@ -289,6 +289,23 @@ class PartialMatches(unittest.TestCase):
         self.assertEqual([(m["playlist_item_id"], uri) for m, uri in resolve(rows, {})], [("1", URI_A)])
 
 
+class Setup(unittest.TestCase):
+    def setUp(self):
+        self.build = importlib.import_module("0_setup").build_settings
+
+    def test_new_values_from_link_and_id(self):
+        s = self.build({}, "https://www.youtube.com/playlist?list=PLbbbbbbbbbbb&si=xxxx", " " + "c" * 32 + " ")
+        self.assertEqual(s, {"youtube_playlist_id": "PLbbbbbbbbbbb", "spotify_client_id": "c" * 32})
+
+    def test_blank_input_keeps_current_values(self):
+        current = {"youtube_playlist_id": "PLbbbbbbbbbbb", "spotify_client_id": "c" * 32}
+        self.assertEqual(self.build(current, "", ""), current)
+
+    def test_template_placeholders_are_dropped(self):
+        s = self.build({"youtube_playlist_id": "PASTE_HERE", "spotify_client_id": "PASTE_HERE"}, "", "")
+        self.assertEqual(s, {})
+
+
 class SearchCache(unittest.TestCase):
     def test_repeated_query_is_answered_from_cache(self):
         from unittest import mock

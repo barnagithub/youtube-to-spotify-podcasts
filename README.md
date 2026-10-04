@@ -25,7 +25,7 @@ The account that owns the app needs Spotify Premium (Spotify's rule for personal
 1. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), create an app.
 2. Redirect URI: `http://127.0.0.1:8888/callback`. Spotify rejects `localhost` here.
 3. Under "Which API/SDKs are you planning to use", tick **Web API**.
-4. Copy the **Client ID** into `settings.json`. The Client Secret isn't used (the scripts log in with PKCE).
+4. Copy the **Client ID** for `0_setup.py`. The Client Secret isn't used (the scripts log in with PKCE).
 
 ### 3. Google / YouTube app
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable
@@ -37,14 +37,13 @@ The account that owns the app needs Spotify Premium (Spotify's rule for personal
    application client gives `Error 400: redirect_uri_mismatch`.
 4. Download the client JSON and save it in this folder as `client_secret.json`.
 
-### 4. settings.json
-```json
-{
-  "youtube_playlist_id": "the playlist's URL, or just the part after list=",
-  "spotify_client_id": "from step 2"
-}
+### 4. Your settings
+```bash
+.venv\Scripts\python 0_setup.py
 ```
-Share-link extras such as `&si=…` are ignored.
+It asks for the YouTube playlist (URL or ID) and the Spotify client ID, writes `settings.json`,
+and checks the packages and `client_secret.json`. Run it again to switch playlists. Your own
+files (settings, credentials, tokens, everything the scripts write) are in `.gitignore`.
 
 ### First login
 The first script that needs each service opens a browser to log in:
@@ -59,6 +58,7 @@ Testing, Google expires its login after about a week; the next run just asks you
 
 | Step | Command | What it does |
 |---|---|---|
+| 0 | `.venv\Scripts\python 0_setup.py` | Creates or updates `settings.json` (once, or to switch playlists). |
 | 1 | `.venv\Scripts\python 1_export_youtube.py` | Reads the playlist into `youtube_items.json` (titles, channels, lengths, dates). |
 | 2 | `.venv\Scripts\python 2_match.py` | Finds each channel's Spotify show and scores every video against its episodes. Writes `matches.json`. Changes nothing. |
 | 3 | `.venv\Scripts\python 3_review.py` | Opens the review page in your browser. Each click is saved to `decisions.json`. Ctrl+C to stop. |

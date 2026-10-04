@@ -73,7 +73,7 @@ def load_settings():
     missing = [k for k in ("youtube_playlist_id", "spotify_client_id")
                if not settings.get(k) or settings[k].startswith("PASTE_")]
     if missing:
-        sys.exit(f"Fill in {', '.join(missing)} in {SETTINGS_FILE.name} first.")
+        sys.exit(f"{SETTINGS_FILE.name} is missing {', '.join(missing)}. Run 0_setup.py first.")
     settings["youtube_playlist_id"] = parse_playlist_id(settings["youtube_playlist_id"])
     return settings
 
