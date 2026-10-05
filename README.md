@@ -12,8 +12,6 @@ Nothing changes on YouTube or Spotify until you run steps 4 and 5 with `--go`.
 ### 1. Python environment
 ```bash
 python -m venv .venv
-```
-```bash
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
 In VS Code, open this folder (File → Open Folder) and `.vscode/settings.json` points the Python
@@ -73,6 +71,12 @@ Run steps 4 and 5 without `--go` first to see what they would do.
 **Order is enforced:** step 5 only removes a video once step 4 recorded its episode as saved
 (`apply_progress.json`). Both steps skip work already done, so re-running them is safe.
 
+## Alternative: keep only what's on Spotify
+For a copy of a playlist (e.g. Watch Later copied into a new one), run
+`5b_remove_unmatched_from_youtube.py` (add `--go` to apply) instead of step 5. It removes items
+you marked "Not on Spotify" and undecided "none" items, keeping the Spotify matches for you to
+handle by hand. Undecided "review", "pending" and deleted/private items stay too.
+
 ## The review page
 Tabs for items to review, auto-matched, no match, and ones you've decided. Each item shows up to
 a few Spotify candidates with how well the title, length, release date and episode number agree.
@@ -93,8 +97,6 @@ A separate tool, not part of steps 1–5. It removes from a **source** playlist 
 is also in a **target** playlist, comparing by video ID. The target is only read.
 ```bash
 .venv\Scripts\python compare_playlists.py SOURCE TARGET
-```
-```bash
 .venv\Scripts\python compare_playlists.py SOURCE TARGET --go
 ```
 SOURCE and TARGET can be playlist IDs or any YouTube link containing `list=`. The first command
@@ -104,13 +106,13 @@ you can open. Watch Later can't be used as either: YouTube's API doesn't expose 
 
 ## YouTube API quota
 Every YouTube call these scripts make is charged to one daily quota, belonging to your Google
-Cloud project. It's shared by all of them: steps 1 and 5 and `compare_playlists.py`, reads included.
+Cloud project. Shared by steps 1, 5 and 5b and `compare_playlists.py`, reads included.
 
 | Call | Used by | Cost |
 |---|---|---|
 | Read a playlist page (up to 50 items) | step 1, `compare_playlists.py` | 1 unit |
 | Look up video lengths (up to 50 videos) | step 1 | 1 unit |
-| Remove one item from a playlist | step 5, `compare_playlists.py --go` | 50 units |
+| Remove one item from a playlist | steps 5 and 5b, `compare_playlists.py --go` | 50 units |
 
 Removals are what use it up. Your quota and today's usage are in Cloud Console under **APIs &
 Services → YouTube Data API v3 → Quotas**. It **resets at midnight Pacific time** (09:00 in
@@ -148,5 +150,5 @@ in several sittings:
 .venv\Scripts\python -m unittest -v
 ```
 Covers the offline logic: duration/date parsing, title scoring, auto/review/none rules, which
-items move to Spotify, playlist links, and the playlist comparison. Nothing in the tests calls
-YouTube or Spotify.
+items move to Spotify or count as unmatched, playlist links, and the playlist comparison.
+Nothing in the tests calls YouTube or Spotify.
