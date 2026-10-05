@@ -15,6 +15,7 @@ _match = importlib.import_module("2_match")
 classify, day_gap, duration_closeness = _match.classify, _match.day_gap, _match.duration_closeness
 episode_numbers, parse_day, rank = _match.episode_numbers, _match.parse_day, _match.rank
 title_similarity = _match.title_similarity
+unmatched_items = importlib.import_module("5b_remove_unmatched_from_youtube").unmatched_items
 
 URI_A = "spotify:episode:" + "a" * 22
 URI_B = "spotify:episode:" + "b" * 22
@@ -140,6 +141,18 @@ class ApplyPlan(unittest.TestCase):
     def test_bad_uri_stops_the_run(self):
         with self.assertRaises(SystemExit):
             resolve(self.matches(), {"2": {"episode_uri": "https://example.com"}})
+
+    def unmatched_ids(self, extra, decisions):
+        return [m["playlist_item_id"] for m in unmatched_items(self.matches() + extra, decisions)]
+
+    def test_unmatched_is_none_and_not_on_spotify_only(self):
+        extra = [{"playlist_item_id": "4", "title": "d", "status": "pending", "candidates": []},
+                 {"playlist_item_id": "5", "title": "e", "status": "unavailable", "candidates": []}]
+        self.assertEqual(self.unmatched_ids(extra, {}), ["3"])  # undecided review and pending stay
+
+    def test_unmatched_follows_decisions(self):
+        decisions = {"1": {"episode_uri": None}, "2": {"episode_uri": None}, "3": {"episode_uri": URI_A}}
+        self.assertEqual(self.unmatched_ids([], decisions), ["1", "2"])
 
 
 class ComparePlaylists(unittest.TestCase):
