@@ -113,6 +113,7 @@ def load_plan():
 
 def youtube_client():
     """YouTube Data API client authorised as the user (needed to read unlisted items and delete)."""
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
@@ -122,8 +123,13 @@ def youtube_client():
     if GOOGLE_TOKEN_FILE.exists():
         creds = Credentials.from_authorized_user_file(str(GOOGLE_TOKEN_FILE), YOUTUBE_SCOPES)
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    elif not creds or not creds.valid:
+        try:
+            creds.refresh(Request())
+        except RefreshError:
+            # Google revokes the saved login of an app in "Testing" after about a week.
+            print("The saved YouTube login has expired; opening the browser to log in again.")
+            creds = None
+    if not creds or not creds.valid:
         if not GOOGLE_CLIENT_SECRET_FILE.exists():
             sys.exit(f"{GOOGLE_CLIENT_SECRET_FILE.name} not found. Download the OAuth "
                      "desktop-app client from Google Cloud Console into this folder.")
