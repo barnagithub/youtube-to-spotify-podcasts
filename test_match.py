@@ -319,6 +319,33 @@ class Setup(unittest.TestCase):
         self.assertEqual(s, {})
 
 
+class YouTubeLogin(unittest.TestCase):
+    def test_expired_saved_login_falls_back_to_browser_login(self):
+        from unittest import mock
+
+        from google.auth.exceptions import RefreshError
+
+        import common
+        stale = mock.Mock(expired=True, refresh_token="r")
+        stale.refresh.side_effect = RefreshError("invalid_grant: Token has been expired or revoked.")
+        fresh = mock.Mock(valid=True)
+        fresh.to_json.return_value = "{}"
+        flow = mock.Mock()
+        flow.run_local_server.return_value = fresh
+        token_file = mock.Mock()  # nothing is written to disk
+        token_file.exists.return_value = True
+        with mock.patch.object(common, "GOOGLE_TOKEN_FILE", token_file), \
+             mock.patch.object(common, "GOOGLE_CLIENT_SECRET_FILE", token_file), \
+             mock.patch("google.oauth2.credentials.Credentials.from_authorized_user_file", return_value=stale), \
+             mock.patch("google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file", return_value=flow), \
+             mock.patch("googleapiclient.discovery.build") as build, \
+             mock.patch("builtins.print"):
+            common.youtube_client()
+        flow.run_local_server.assert_called_once()
+        token_file.write_text.assert_called_once_with("{}", encoding="utf-8")
+        self.assertIs(build.call_args.kwargs["credentials"], fresh)
+
+
 class SearchCache(unittest.TestCase):
     def test_repeated_query_is_answered_from_cache(self):
         from unittest import mock
